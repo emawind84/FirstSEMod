@@ -55,6 +55,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="ScriptTemplate.cs" />
+    <Compile Include="SecuritySystem.cs" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="Properties\" />

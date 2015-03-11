@@ -22,5 +22,9 @@ namespace FirstSEMod
     public class ScriptTemplate
     {
         IMyGridTerminalSystem GridTerminalSystem;
+
+        void Main() { 
+            
+        }
     }
 }
