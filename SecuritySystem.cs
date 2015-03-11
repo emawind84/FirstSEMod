@@ -234,11 +234,11 @@ namespace FirstSEMod
                     controlThrustersAction.Apply(controller);
                 }
 
-                if (((IMyShipController)controller).DampenersOverride == false)
-                {
-                    // enable dampeners override        
-                    dampenersOverrideAction.Apply(controller);
-                }
+                //if (((IMyShipController)controller).DampenersOverride == false)
+                //{
+                //    // enable dampeners override        
+                //    dampenersOverrideAction.Apply(controller);
+                //}
             }
             Log(log, "Thrusters control disabled");
         }
