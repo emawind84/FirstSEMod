@@ -22,10 +22,11 @@ namespace FirstSEMod
         IMyGridTerminalSystem GridTerminalSystem;
 
         // #### SETTINGS #### //
-        public static string SOUND_ALARM_GROUP = "sound blocks";
-        public static string LIGHT_ALARM_GROUP = "alert lights";
+        public static string SOUND_ALERT_GROUP = "sound blocks";
+        public static string LIGHT_ALERT_GROUP = "alert lights";
         public static string LOG_BLOCK_GROUP = "loggers";
         public static string ALARM_BLOCK_TAG = "Beacon";
+        public static string ALARM_ON_LIGHT_TAG = "[ALARM]";
         public static int LOG_GRID_PER_STEP = 1;
 
         // #### PRIVATE #### //
@@ -292,7 +293,7 @@ namespace FirstSEMod
         void SwitchSoundAlarm(bool swh)
         {
             List<IMyBlockGroup> alarmsGrps = new List<IMyBlockGroup>();
-            SearchGroupsOfName(SOUND_ALARM_GROUP, alarmsGrps);
+            SearchGroupsOfName(SOUND_ALERT_GROUP, alarmsGrps);
 
             for (int i = 0; i < alarmsGrps.Count; i++)
             {
@@ -320,7 +321,7 @@ namespace FirstSEMod
         void SwitchLightAlarm(bool swh)
         {
             List<IMyBlockGroup> alarmsGrps = new List<IMyBlockGroup>();
-            SearchGroupsOfName(LIGHT_ALARM_GROUP, alarmsGrps);
+            SearchGroupsOfName(LIGHT_ALERT_GROUP, alarmsGrps);
 
             for (int i = 0; i < alarmsGrps.Count; i++)
             {
@@ -338,6 +339,28 @@ namespace FirstSEMod
                         switchOff.Apply(blocks[y]);
                     }
                 }
+            }
+        }
+
+        void ToggleAlarmLight(IMyTerminalBlock log, bool swh = true)
+        {
+            var blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName(ALARM_ON_LIGHT_TAG, blocks);
+            if (blocks.Count == 0) return;
+            var bl = blocks[0];
+            bl.SetValueFloat("Blink Interval", 1F);
+            bl.SetValueFloat("Blink Lenght", 10F);
+            Log(log, "Blink Interval: " + bl.GetValueFloat("Blink Interval"));
+            Log(log, "Blink Lenght: " + bl.GetValueFloat("Blink Lenght"));
+            if (swh)
+            {
+                ITerminalAction switchOn = bl.GetActionWithName("OnOff_On");
+                switchOn.Apply(bl);
+            }
+            else
+            {
+                ITerminalAction switchOff = bl.GetActionWithName("OnOff_Off");
+                switchOff.Apply(bl);
             }
         }
 
