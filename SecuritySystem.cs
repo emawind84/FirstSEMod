@@ -1,32 +1,30 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using Sandbox.Common;
-using Sandbox.Common.Components;
-using Sandbox.Common.ObjectBuilders;
-using Sandbox.Definitions;
-using Sandbox.Engine;
 using Sandbox.ModAPI.Ingame;
 using Sandbox.ModAPI.Interfaces;
-using Sandbox.Game;
+using SpaceEngineers.Game.ModAPI.Ingame;
 
 namespace FirstSEMod
 {
     /// <summary>
-    /// SE Security System v1.0.3
+    /// SE Security System v1.1
     /// </summary>
-    class SecuritySystem
+    class Program : MyGridProgram
     {
-        IMyGridTerminalSystem GridTerminalSystem;
-
         // #### SETTINGS #### //
-        public static string SOUND_ALERT_GROUP = "sound blocks";
-        public static string LIGHT_ALERT_GROUP = "alert lights";
-        public static string LOG_BLOCK_GROUP = "loggers";
-        public static string ALARM_BLOCK_TAG = "Beacon";
-        public static string ALARM_ON_LIGHT_TAG = "[ALARM]";
+        public static string SOUND_ALERT_TAG = "[SS-ALARM]";
+        public static string LIGHT_ALERT_TAG = "[SS-ALARM]";
+
+        // these blocks will receive the log (if not LCD the name will be used for logging)
+        public static string LOG_BLOCK_TAG = "[SS-LOG]";
+
+        // this block turn on/off the security system
+        public static string ALARM_ON_SWITCH_TAG = "[SS-SWITCH]";
+
+        // this light turn on if the security system is on
+        public static string ALARM_ON_STATUS_TAG = "[SS-LIGHT]";
+
+        // the number of lcd to update per run
         public static int LOG_GRID_PER_STEP = 1;
 
         // #### PRIVATE #### //
@@ -37,39 +35,48 @@ namespace FirstSEMod
         public int blockCount = 0;
         public bool blocksMissing = false;
         public static int step = 0;
-        void Main()
+
+        public Program()
         {
-            var _grp = new List<IMyBlockGroup>();
-            SearchGroupsOfName(LOG_BLOCK_GROUP, _grp);
+            Runtime.UpdateFrequency = UpdateFrequency.Update100;
+        }
+
+        public void Main()
+        {
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName(LOG_BLOCK_TAG, blocks);
+            //SearchGroupsOfName(LOG_BLOCK_GROUP, _grp);
             //GridTerminalSystem.SearchBlocksOfName(LOG_BLOCK_TAG, loggers);
-
-            if (_grp.Count == 0 || _grp[0].Blocks.Count == 0)
-                return;
-
-            List<IMyTerminalBlock> _loggers = _grp[0].Blocks;
+            List<IMyTerminalBlock> _loggers = blocks;
             for (int i = 0; i < LOG_GRID_PER_STEP; i++)
             {
-                var _logger = _loggers[(step * LOG_GRID_PER_STEP + i) % _loggers.Count];
+                IMyTerminalBlock _logger = null;
+                if ( _loggers.Count > 0 )
+                {
+                    _logger = _loggers[(step * LOG_GRID_PER_STEP + i) % _loggers.Count];
+                }
                 Log(_logger, "clear");
                 Log(_logger, "System online");
 
                 DateTime now = DateTime.Now;
                 Log(_logger, "Time: " + now.ToString("HH:mm:ss"));
 
-                var beacon = GridTerminalSystem.GetBlockWithName(ALARM_BLOCK_TAG);
-                if (beacon != null && (beacon as IMyFunctionalBlock).Enabled)
+                List<IMyTerminalBlock> _t = new List<IMyTerminalBlock>();
+                GridTerminalSystem.SearchBlocksOfName(ALARM_ON_SWITCH_TAG, _t);
+                if (_t.Count > 0 && (_t[0] as IMyFunctionalBlock).Enabled)
                 {
                     Log(_logger, "Alarm on");
-                    CloseDoors(_logger);
+                    ToggleAlarmLight(_logger);
                     RunSecuritySystem(_logger);
                 }
                 else
                 {
+                    Log(_logger, "Alarm off");
+                    ToggleAlarmLight(_logger, false);
                     blockCount = 0;
                 }
-                RunProximitySensorCheck(_logger);
-                RunPowerStatusCheck(_logger);
-
+                //RunProximitySensorCheck(_logger);
+                //RunPowerStatusCheck(_logger);
 
                 // #### TEST ####       
                 //DisableThrustersControl();       
@@ -84,15 +91,14 @@ namespace FirstSEMod
                 if(_logger is IMyTextPanel)
                     MMLCDTextManager.UpdatePanel(_logger as IMyTextPanel);
             }
-
-
             
             step++;
         }
 
         void RunSecuritySystem(IMyTerminalBlock log)
         {
-            List<IMyTerminalBlock> allBlocks = GridTerminalSystem.Blocks;
+            List<IMyTerminalBlock> allBlocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocks(allBlocks);
 
             if (blockCount != 0 && blockCount != allBlocks.Count)
             {
@@ -108,14 +114,14 @@ namespace FirstSEMod
             for (int i = 0; i < allBlocks.Count; i++)
             {
                 // check if hacked
-                var block = (IMyCubeBlock)allBlocks[i];
-                if (block.IsBeingHacked)
+                var block = allBlocks[i];
+                if (block.IsBeingHacked || ( block.OwnerId != 0 && Me.OwnerId != block.OwnerId ) )
                 {
+                    check = false;
                     if (!hackedBlocks.Contains((IMyTerminalBlock)block))
                     {
                         hackedBlocks.Add((IMyTerminalBlock)block);
                     }
-                    check = false;
                     Log(log, "Hacking detected: " + (block as IMyTerminalBlock).CustomName);
                     break;
                 }
@@ -129,29 +135,32 @@ namespace FirstSEMod
                 }
             }
 
-            if (hackedBlocks.Count > 0 || blocksMissing)
-            {
-                check = false;
-                TakeSecurityMeasure(log);
-                Log(log, "Hacking detected or block missing");
-            }
+            check &= RunProximitySensorCheck(log);
+
+            //if (hackedBlocks.Count > 0 || blocksMissing)
+            //{
+            //    check = false;
+            //    TakeSecurityMeasure(log);
+            //    Log(log, "Hacking detected or block missing");
+            //}
 
             // sound the alarm     
             if (check)
             {
                 // everything is ok     
-                SwitchAlarm(false);
+                SwitchAlarm(false, log);
                 Log(log, "No breach or damage detected");
             }
             else
             {
                 // something went wrong     
-                SwitchAlarm(true);
+                TakeSecurityMeasure(log);
+                SwitchAlarm(true, log);
                 EnableAntenna();
             }
         }
 
-        void RunProximitySensorCheck(IMyTerminalBlock log)
+        bool RunProximitySensorCheck(IMyTerminalBlock log)
         {
             bool detected = false;
             List<IMyTerminalBlock> sensors = new List<IMyTerminalBlock>();
@@ -159,7 +168,7 @@ namespace FirstSEMod
 
             for (int i = 0; i < sensors.Count; i++)
             {
-                if (((IMySensorBlock)sensors[i]).LastDetectedEntity != null)
+                if ( !((IMySensorBlock)sensors[i]).LastDetectedEntity.IsEmpty() )
                 {
                     detected = true;
                     Log(log, sensors[i].CustomName + ": Entity detected");
@@ -168,17 +177,12 @@ namespace FirstSEMod
             }
 
             IMyTerminalBlock light = GridTerminalSystem.GetBlockWithName("Alert Light");
-            if (!detected)
+            if (detected)
             {
-                Log(log, "No entity detected!");
-                SwitchAlarm(false);
+                return false;
             }
-            else
-            {
-                //Log("entity detected!");
-                SwitchAlarm();
-            }
-
+            Log(log, "No entity detected!");
+            return true;
         }
 
         void TakeSecurityMeasure(IMyTerminalBlock log)
@@ -190,7 +194,7 @@ namespace FirstSEMod
             EnableTurrets(log);
         }
 
-        void EnableTurrets(IMyTerminalBlock log)
+        void EnableTurrets(IMyTerminalBlock log=null)
         {
             List<IMyTerminalBlock> turrets = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType<IMyLargeTurretBase>(turrets);
@@ -203,7 +207,7 @@ namespace FirstSEMod
             Log(log, "Turrets enabled");
         }
 
-        void DisableThrustersControl(IMyTerminalBlock log)
+        void DisableThrustersControl(IMyTerminalBlock log=null)
         {
             /* 
             for (int i = 0; i < hackedBlocks.Count; i++ )
@@ -244,7 +248,7 @@ namespace FirstSEMod
             Log(log, "Thrusters control disabled");
         }
 
-        void DisableThrusters(IMyTerminalBlock log)
+        void DisableThrusters(IMyTerminalBlock log=null)
         {
             List<IMyTerminalBlock> thrusters = new List<IMyTerminalBlock>();
             GridTerminalSystem.GetBlocksOfType<IMyThrust>(thrusters);
@@ -284,59 +288,61 @@ namespace FirstSEMod
             }
         }
 
-        void SwitchAlarm(bool swh = true)
+        void SwitchAlarm(bool swh=true, IMyTerminalBlock log=null)
         {
-            SwitchSoundAlarm(swh);
-            SwitchLightAlarm(swh);
+            SwitchSoundAlarm(swh, log);
+            SwitchLightAlarm(swh, log);
         }
 
-        void SwitchSoundAlarm(bool swh)
+        void SwitchSoundAlarm(bool swh, IMyTerminalBlock log = null)
         {
-            List<IMyBlockGroup> alarmsGrps = new List<IMyBlockGroup>();
-            SearchGroupsOfName(SOUND_ALERT_GROUP, alarmsGrps);
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName(SOUND_ALERT_TAG, blocks);
 
-            for (int i = 0; i < alarmsGrps.Count; i++)
+            for (int i = 0; i < blocks.Count; i++)
             {
-                var blocks = alarmsGrps[i].Blocks;
-                for (int y = 0; y < blocks.Count; y++)
+                if (blocks[i] is IMySoundBlock)
                 {
                     //get the action to play the sound bolck          
-                    ITerminalAction playalarms = blocks[y].GetActionWithName("PlaySound");
-                    ITerminalAction stopalarms = blocks[y].GetActionWithName("StopSound");
+                    ITerminalAction playalarms = blocks[i].GetActionWithName("PlaySound");
+                    ITerminalAction stopalarms = blocks[i].GetActionWithName("StopSound");
 
                     if (swh)
                     {
+                        //Log(log, "sound alarm on");
                         //Sound the alarm         
-                        stopalarms.Apply(blocks[y]);
-                        playalarms.Apply(blocks[y]);
+                        stopalarms.Apply(blocks[i]);
+                        playalarms.Apply(blocks[i]);
                     }
                     else
                     {
-                        stopalarms.Apply(blocks[y]);
+                        //Log(log, "sound alarm off");
+                        stopalarms.Apply(blocks[i]);
                     }
                 }
             }
         }
 
-        void SwitchLightAlarm(bool swh)
+        void SwitchLightAlarm(bool swh, IMyTerminalBlock log = null)
         {
-            List<IMyBlockGroup> alarmsGrps = new List<IMyBlockGroup>();
-            SearchGroupsOfName(LIGHT_ALERT_GROUP, alarmsGrps);
+            List<IMyTerminalBlock> blocks = new List<IMyTerminalBlock>();
+            GridTerminalSystem.SearchBlocksOfName(LIGHT_ALERT_TAG, blocks);
 
-            for (int i = 0; i < alarmsGrps.Count; i++)
+            for (int i = 0; i < blocks.Count; i++)
             {
-                var blocks = alarmsGrps[i].Blocks;
-                for (int y = 0; y < blocks.Count; y++)
+                if (blocks[i] is IMyLightingBlock)
                 {
                     if (swh)
                     {
-                        ITerminalAction switchOn = blocks[y].GetActionWithName("OnOff_On");
-                        switchOn.Apply(blocks[y]);
+                        //Log(log, "light alarm on");
+                        ITerminalAction switchOn = blocks[i].GetActionWithName("OnOff_On");
+                        switchOn.Apply(blocks[i]);
                     }
                     else
                     {
-                        ITerminalAction switchOff = blocks[y].GetActionWithName("OnOff_Off");
-                        switchOff.Apply(blocks[y]);
+                        //Log(log, "light alarm off");
+                        ITerminalAction switchOff = blocks[i].GetActionWithName("OnOff_Off");
+                        switchOff.Apply(blocks[i]);
                     }
                 }
             }
@@ -345,22 +351,28 @@ namespace FirstSEMod
         void ToggleAlarmLight(IMyTerminalBlock log, bool swh = true)
         {
             var blocks = new List<IMyTerminalBlock>();
-            GridTerminalSystem.SearchBlocksOfName(ALARM_ON_LIGHT_TAG, blocks);
-            if (blocks.Count == 0) return;
-            var bl = blocks[0];
-            bl.SetValueFloat("Blink Interval", 1F);
-            bl.SetValueFloat("Blink Lenght", 10F);
-            Log(log, "Blink Interval: " + bl.GetValueFloat("Blink Interval"));
-            Log(log, "Blink Lenght: " + bl.GetValueFloat("Blink Lenght"));
-            if (swh)
-            {
-                ITerminalAction switchOn = bl.GetActionWithName("OnOff_On");
-                switchOn.Apply(bl);
-            }
-            else
-            {
-                ITerminalAction switchOff = bl.GetActionWithName("OnOff_Off");
-                switchOff.Apply(bl);
+            GridTerminalSystem.SearchBlocksOfName(ALARM_ON_STATUS_TAG, blocks);
+
+            for (int i = 0; i < blocks.Count; i++) {
+                if (blocks[i] is IMyLightingBlock) {
+                    var bl = blocks[0];
+                    bl.SetValueFloat("Blink Interval", 1F);
+                    bl.SetValueFloat("Blink Lenght", 10F);
+                    //Log(log, "Blink Interval: " + bl.GetValueFloat("Blink Interval"));
+                    //Log(log, "Blink Lenght: " + bl.GetValueFloat("Blink Lenght"));
+                    if (swh)
+                    {
+                        //Log(log, "alarm lights on");
+                        ITerminalAction switchOn = bl.GetActionWithName("OnOff_On");
+                        switchOn.Apply(bl);
+                    }
+                    else
+                    {
+                        //Log(log, "alarm lights off");
+                        ITerminalAction switchOff = bl.GetActionWithName("OnOff_Off");
+                        switchOff.Apply(bl);
+                    }
+                }
             }
         }
 
@@ -380,14 +392,14 @@ namespace FirstSEMod
                 //((IMyTextPanel)block).ShowTextureOnScreen();
                 //((IMyTextPanel)block).ShowPublicTextOnScreen();
             }
-            else
+            else if (log != null)
             {
                 if (content.Equals("clear"))
-                    log.SetCustomName("");
+                    log.CustomName = "";
                 else if (append)
-                    log.SetCustomName(log.CustomName + content + "\n");
+                    log.CustomName = log.CustomName + content + "\n";
                 else
-                    log.SetCustomName(content + "\n");
+                    log.CustomName = content + "\n";
             }
         }
 
@@ -399,7 +411,8 @@ namespace FirstSEMod
             //if( name == null || name == String.Empty ) return;      
             if (name == null || name == "") return;
 
-            List<IMyBlockGroup> allGroups = GridTerminalSystem.BlockGroups;
+            List<IMyBlockGroup> allGroups = new List<IMyBlockGroup>();
+            GridTerminalSystem.GetBlockGroups(allGroups);
 
             for (int i = 0; i < allGroups.Count; i++)
             {
@@ -484,7 +497,7 @@ namespace FirstSEMod
             {
                 return (int)float.Parse(values[0]);
             }
-            return 0;
+            //return 0;
         }
 
         void RunPowerStatusCheck(IMyTerminalBlock log)
@@ -498,11 +511,15 @@ namespace FirstSEMod
             GridTerminalSystem.GetBlocksOfType<IMyReactor>(tmp);
             allPower.AddRange(tmp);
 
-            var freePower = 0;
+            //var freePower = 0;
             var usedOutput = 0;
             var maxOutput = 0;
             for (var i = 0; i < allPower.Count; i++)
             {
+                if (allPower[i] is IMyFunctionalBlock && !(allPower[i] as IMyFunctionalBlock).Enabled)
+                {
+                    continue;
+                }
                 //Log( GetDetailedInfoValue( solarBlocks[i], "Current Output" ) );  
                 usedOutput += GetPowerAsInt(GetDetailedInfoValue(allPower[i], "Current Output"));
                 maxOutput += GetPowerAsInt(GetDetailedInfoValue(allPower[i], "Max Output"));
@@ -512,6 +529,44 @@ namespace FirstSEMod
             Log(log, "Power output: " + usedOutput);
             Log(log, "Power available: " + (maxOutput - usedOutput));
         }
+
+        void RunEmergencyPowerCheck(IMyTerminalBlock log)
+        {
+            List<IMyTerminalBlock> solars = new List<IMyTerminalBlock>();
+            GridTerminalSystem.GetBlocksOfType<IMySolarPanel>(solars);
+
+            var usedOutput = 0;
+            var maxOutput = 0;
+            for (var i = 0; i < solars.Count; i++)
+            {
+                //Log( GetDetailedInfoValue( solarBlocks[i], "Current Output" ) );  
+                usedOutput += GetPowerAsInt(GetDetailedInfoValue(solars[i], "Current Output"));
+                maxOutput += GetPowerAsInt(GetDetailedInfoValue(solars[i], "Max Output"));
+            }
+
+            List<IMyTerminalBlock> reactors = new List<IMyTerminalBlock>();
+
+            Log(log, "Solar power available: " + maxOutput);
+            if (maxOutput - usedOutput < 10000)
+            {
+                for (var i = 0; i < reactors.Count; i++)
+                {
+                    ITerminalAction switchOn = reactors[i].GetActionWithName("OnOff_On");
+                    switchOn.Apply(reactors[i]);
+                }
+                Log(log, "Reactor power on");
+            }
+            else
+            {
+                for (var i = 0; i < reactors.Count; i++)
+                {
+                    ITerminalAction switchOn = reactors[i].GetActionWithName("OnOff_Off");
+                    switchOn.Apply(reactors[i]);
+                }
+                Log(log, "Reactor power off");
+            }
+        }
+        
     }
 
     /// <summary>

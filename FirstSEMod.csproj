@@ -36,6 +36,15 @@
     <Reference Include="Sandbox.Game">
       <HintPath>GameLibraries\Sandbox.Game.dll</HintPath>
     </Reference>
+    <Reference Include="Sandbox.Graphics">
+      <HintPath>GameLibraries\Sandbox.Graphics.dll</HintPath>
+    </Reference>
+    <Reference Include="SpaceEngineers.Game">
+      <HintPath>GameLibraries\SpaceEngineers.Game.dll</HintPath>
+    </Reference>
+    <Reference Include="SpaceEngineers.ObjectBuilders">
+      <HintPath>GameLibraries\SpaceEngineers.ObjectBuilders.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Xml.Linq" />
@@ -43,14 +52,35 @@
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
-    <Reference Include="VRage.Common">
-      <HintPath>GameLibraries\VRage.Common.dll</HintPath>
+    <Reference Include="VRage">
+      <HintPath>GameLibraries\VRage.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Ansel">
+      <HintPath>GameLibraries\VRage.Ansel.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Audio">
+      <HintPath>GameLibraries\VRage.Audio.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Game">
+      <HintPath>GameLibraries\VRage.Game.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Input">
+      <HintPath>GameLibraries\VRage.Input.dll</HintPath>
     </Reference>
     <Reference Include="VRage.Library">
       <HintPath>GameLibraries\VRage.Library.dll</HintPath>
     </Reference>
     <Reference Include="VRage.Math">
       <HintPath>GameLibraries\VRage.Math.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Render">
+      <HintPath>GameLibraries\VRage.Render.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Render11">
+      <HintPath>GameLibraries\VRage.Render11.dll</HintPath>
+    </Reference>
+    <Reference Include="VRage.Scripting">
+      <HintPath>GameLibraries\VRage.Scripting.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
